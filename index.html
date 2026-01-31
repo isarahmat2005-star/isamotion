@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Isa Motion - Pro Generator</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech&display=swap" rel="stylesheet">
+
+<style>
+  /* --- GLOBAL SETTINGS --- */
+  * { box-sizing: border-box; font-family: 'Share Tech', sans-serif !important; text-transform: capitalize !important; user-select: none; }
+  body { margin: 0; padding: 0; overflow: hidden; background: #000; }
+  
+  /* Canvas Utama */
+  #defaultCanvas0 { display: block; width: 100vw; height: 100vh; position: fixed; top: 0; left: 0; z-index: 0; }
+  /* Canvas Buffer (Hidden) */
+  #export-canvas { position: fixed; top: 0; left: 0; z-index: -100; visibility: hidden; pointer-events: none; }
+
+  /* --- TOMBOL HIDE --- */
+  #global-toggle { position: fixed; top: 20px; left: 20px; background: rgba(30, 41, 59, 0.9); border: 1px solid #00ffff; color: #00ffff; padding: 10px 20px; border-radius: 4px; cursor: pointer; z-index: 2000; font-size: 14px; letter-spacing: 1px; transition: 0.2s; }
+  #global-toggle:hover { background: #00ffff; color: #000; box-shadow: 0 0 15px rgba(0,255,255,0.5); }
+
+  /* --- UI PANEL --- */
+  #ui-container { position: absolute; top: 70px; left: 20px; width: 340px; background: rgba(15, 23, 42, 0.95); border: 1px solid #334155; border-radius: 8px; color: #94a3b8; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.9); z-index: 1000; display: flex; flex-direction: column; }
+  .ui-header { background: #1e293b; padding: 15px 20px; border-bottom: 1px solid #334155; border-radius: 8px 8px 0 0; cursor: move; display: flex; justify-content: space-between; align-items: center; }
+  .ui-footer { background: #1e293b; border-radius: 0 0 8px 8px; border-top: 1px solid #334155; height: 25px; cursor: move; }
+  .ui-content { padding: 20px; max-height: 70vh; overflow-y: auto; }
+  .ui-hidden { display: none !important; }
+
+  /* --- ELEMENTS --- */
+  h1 { font-size: 18px; margin: 0; color: #00ffff; letter-spacing: 1px; }
+  .label-row { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 14px; color: #cbd5e1; }
+  .value-display { color: #00ffff; }
+  .control-group { margin-bottom: 18px; }
+  select { width: 100%; background: #0f172a; color: #00ffff; border: 1px solid #334155; padding: 10px; border-radius: 4px; font-size: 14px; outline: none; cursor: pointer; }
+  select:hover { border-color: #00ffff; }
+  input[type="range"] { -webkit-appearance: none; width: 100%; height: 4px; background: #334155; border-radius: 2px; margin-top: 5px; }
+  input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; background: #00ffff; border-radius: 50%; cursor: pointer; border: 2px solid #000; box-shadow: 0 0 10px rgba(0, 255, 255, 0.5); }
+  
+  .btn-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 20px; }
+  button { border: none; padding: 12px; border-radius: 4px; cursor: pointer; font-size: 14px; text-align: center; letter-spacing: 0.5px; transition: 0.2s; background: #1e293b; color: #94a3b8; border: 1px solid #334155; }
+  button:hover { border-color: #00ffff; color: #00ffff; }
+  .btn-active, .btn-toggle.active, .q-opt.active { background: #00ffff !important; color: #000 !important; border-color: #00ffff !important; font-weight: bold; }
+  .btn-danger { border-color: #ef4444; color: #ef4444; }
+  .btn-danger:hover { background: #ef4444; color: white; }
+  .btn-full { grid-column: span 2; }
+  .quality-switch { display: flex; background: #0f172a; border: 1px solid #334155; border-radius: 4px; padding: 2px; margin-bottom: 20px; }
+  .q-opt { flex: 1; text-align: center; padding: 6px; font-size: 12px; cursor: pointer; border-radius: 2px; color: #64748b; }
+
+  /* --- OVERLAYS --- */
+  #portrait-guide { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 360px; height: 640px; border: 2px solid #00ffff; box-shadow: 0 0 0 9999px rgba(0,0,0,0.85); z-index: 500; display: none; pointer-events: none; }
+  #portrait-guide::after { content: "9:16 Crop Area"; position: absolute; top: -25px; left: 0; color: #00ffff; font-size: 12px; background: #000; padding: 2px 8px; }
+  #rec-overlay { position: fixed; top: 20px; right: 20px; background: rgba(239, 68, 68, 0.2); border: 1px solid #ef4444; color: #ef4444; padding: 10px 20px; border-radius: 4px; font-size: 16px; font-weight: bold; font-variant-numeric: tabular-nums; display: none; align-items: center; gap: 10px; backdrop-filter: blur(5px); z-index: 2000; }
+  .dot { width: 10px; height: 10px; background: #ef4444; border-radius: 50%; animation: pulse 1s infinite; }
+  @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }
+</style>
+</head>
+<body>
+
+<div id="rec-overlay"><div class="dot"></div> <span id="rec-text">Recording 00.00</span></div>
+<div id="portrait-guide"></div>
+<canvas id="export-canvas"></canvas>
+
+<button id="global-toggle" onclick="toggleUI()">Hide Controls</button>
+
+<div id="ui-container">
+  <div class="ui-drag-zone ui-header" id="drag-header">
+    <h1>Isa Motion V12</h1>
+  </div>
+
+  <div class="ui-content">
+    <div class="label-row"><span>Performance Mode</span></div>
+    <div class="quality-switch">
+      <div class="q-opt active" id="modeEco" onclick="setQuality('eco')">Eco (Smooth)</div>
+      <div class="q-opt" id="modePro" onclick="setQuality('pro')">Pro (4K Ready)</div>
+    </div>
+
+    <div class="control-group">
+      <div class="label-row"><span>Visual Engine (30 Modes)</span></div>
+      <select id="patternSelect">
+        <option value="0">1. Topographic Map</option>
+        <option value="1">2. Silky Waves</option>
+        <option value="2">3. Glass Distortion</option>
+        <option value="3">4. Soft Bokeh</option>
+        <option value="4">5. Circuit Board</option>
+        <option value="5">6. Digital Glitch</option>
+        <option value="6">7. Matrix Rain</option>
+        <option value="7">8. Wireframe Landscape</option>
+        <option value="8">9. Kaleidoscope</option>
+        <option value="9">10. Liquid Plasma</option>
+        <option value="10">11. Fractal Zoom</option>
+        <option value="11">12. Hypnotic Spiral</option>
+        <option value="12">13. Truchet Tiles</option>
+        <option value="13">14. Moiré Patterns</option>
+        <option value="14">15. Bauhaus Shapes</option>
+        <option value="15">16. Hexagon Hive</option>
+        <option value="16">17. Neon Rain</option>
+        <option value="17">18. Radar Scan</option>
+        <option value="18">19. Starfield Warp</option>
+        <option value="19">20. Liquid Chrome</option>
+        <option value="20">21. Nebula Cloud</option>
+        <option value="21">22. Cyber Rings</option>
+        <option value="22">23. Pixel Sort</option>
+        <option value="23">24. Halftone Dots</option>
+        <option value="24">25. Energy Field</option>
+        <option value="25">26. Hyperspace</option>
+        <option value="26">27. Caustics Water</option>
+        <option value="27">28. Retro Grid</option>
+        <option value="28">29. Bio Cells</option>
+        <option value="29">30. Sine Waves</option>
+      </select>
+    </div>
+
+    <div class="control-group">
+      <div class="label-row"><span>Output Guide</span></div>
+      <div style="display:flex; gap:5px;">
+        <button class="btn-toggle active" id="mode-land" onclick="setFrame('land')" style="flex:1;">16:9 Full</button>
+        <button class="btn-toggle" id="mode-port" onclick="setFrame('port')" style="flex:1;">9:16 Port</button>
+      </div>
+    </div>
+
+    <div class="control-group">
+      <div class="label-row"><span>Flow Speed</span> <span id="val-speed" class="value-display">1.0</span></div>
+      <input type="range" id="speedRaw" min="0" max="200" value="50" oninput="updateLabels()">
+    </div>
+
+    <div class="control-group">
+      <div class="label-row"><span>Zoom / Scale</span> <span id="val-scale" class="value-display">1.0</span></div>
+      <input type="range" id="scaleRaw" min="10" max="500" value="100" oninput="updateLabels()">
+    </div>
+
+    <div class="control-group">
+      <div class="label-row"><span>Color Shift</span> <span id="val-color" class="value-display">Hue</span></div>
+      <input type="range" id="colorRaw" min="0" max="100" value="50" oninput="updateLabels()">
+    </div>
+
+    <div class="btn-grid">
+      <button id="btn-pause" onclick="togglePause()">Pause Animation</button>
+      <button class="btn-danger btn-full" id="btn-rec" onclick="toggleRecord()">
+        Start Recording
+      </button>
+    </div>
+  </div>
+
+  <div class="ui-drag-zone ui-footer" id="drag-footer"></div>
+</div>
+
+<script id="vertShader" type="x-shader/x-vertex">
+  attribute vec3 aPosition; attribute vec2 aTexCoord; varying vec2 vTexCoord;
+  void main() { vTexCoord = aTexCoord; vec4 pos = vec4(aPosition, 1.0); pos.xy = pos.xy * 2.0 - 1.0; gl_Position = pos; }
+</script>
+
+<script id="fragShader" type="x-shader/x-fragment">
+  precision mediump float; varying vec2 vTexCoord; uniform float u_time; uniform vec2 u_resolution; uniform float u_hue; uniform float u_scale; uniform int u_pattern;
+  #define PI 3.14159265359
+  vec3 hsb2rgb(vec3 c){ vec3 rgb = clamp(abs(mod(c.x*6.0+vec3(0.0,4.0,2.0),6.0)-3.0)-1.0, 0.0, 1.0); rgb = rgb*rgb*(3.0-2.0*rgb); return c.z * mix(vec3(1.0), rgb, c.y); }
+  float random(vec2 st) { return fract(sin(dot(st.xy, vec2(12.9898,78.233))) * 43758.5453123); }
+  float noise(vec2 st) { vec2 i = floor(st); vec2 f = fract(st); float a = random(i); float b = random(i + vec2(1.0, 0.0)); float c = random(i + vec2(0.0, 1.0)); float d = random(i + vec2(1.0, 1.0)); vec2 u = f * f * (3.0 - 2.0 * f); return mix(a, b, u.x) + (c - a)* u.y * (1.0 - u.x) + (d - b) * u.x * u.y; }
+  vec2 random2( vec2 p ) { return fract(sin(vec2(dot(p,vec2(127.1,311.7)),dot(p,vec2(269.5,183.3))))*43758.5453); }
+
+  // 30 PATTERNS
+  vec3 patTopo(vec2 uv) { float n=noise(uv*3.+u_time*0.2); n+=noise(uv*6.-u_time*0.1)*0.5; float l=step(0.1,abs(sin(n*20.))); return hsb2rgb(vec3(u_hue+n*0.2,0.6,l*0.8+0.2)); }
+  vec3 patSilk(vec2 uv) { float v=sin(uv.x*10.+u_time+uv.y*5.)+sin(uv.y*8.-u_time+uv.x*2.); return hsb2rgb(vec3(u_hue+v*0.05,0.7,0.5+0.5*sin(v))); }
+  vec3 patGlass(vec2 uv) { vec2 d=vec2(noise(uv+u_time),noise(uv-u_time))*0.1; float g=step(0.9,fract((uv.x+d.x)*10.))+step(0.9,fract((uv.y+d.y)*10.)); return hsb2rgb(vec3(u_hue+g*0.1,0.4,0.8+g*0.2)); }
+  vec3 patBokeh(vec2 uv) { vec3 c=vec3(0.); for(float i=0.;i<10.;i++){ vec2 p=vec2(random(vec2(i)),random(vec2(i*2.))); p.y-=u_time*(0.1+random(vec2(i))*0.2); p=fract(p); float d=length(uv-p); c+=hsb2rgb(vec3(u_hue+i*0.1,0.5,1.))*smoothstep(0.1,0.05,d)*0.5; } return c; }
+  vec3 patCircuit(vec2 uv) { vec2 g=floor(uv*10.); float m=step(0.8,random(g+floor(u_time*2.))); return hsb2rgb(vec3(u_hue,1.,m)); }
+  vec3 patGlitch(vec2 uv) { float s=step(0.95,random(vec2(0.,uv.y*10.+floor(u_time*10.)))); uv.x+=s*0.1; return hsb2rgb(vec3(u_hue+s,0.8,0.8)); }
+  vec3 patMatrix(vec2 uv) { vec2 g=floor(uv*vec2(20.,10.)); float d=fract(g.x*0.1+u_time*2.+random(vec2(g.x))); float c=step(0.5,random(g+floor(u_time*5.))); return vec3(0.,d*c,0.)+hsb2rgb(vec3(u_hue,1.,0.2)); }
+  vec3 patWire(vec2 uv) { float h=0.5+sin(uv.x*2.+u_time)*0.1; float g=step(0.95,fract(uv.x*10.))+step(0.95,fract(uv.y*10.+u_time)); return (uv.y>h)?vec3(0.):hsb2rgb(vec3(u_hue,1.,g)); }
+  vec3 patKaleido(vec2 uv) { vec2 p=uv-0.5; float r=length(p); float a=atan(p.y,p.x); a=mod(a,PI/4.); p=r*vec2(cos(a),sin(a)); return patSilk(p*5.); }
+  vec3 patPlasma(vec2 uv) { float v=sin(uv.x*10.+u_time)+sin(uv.y*10.+u_time)+sin((uv.x+uv.y)*10.+u_time); return hsb2rgb(vec3(u_hue+v*0.1,1.,1.)); }
+  vec3 patFractal(vec2 uv) { vec2 c=uv*2.-1.; vec2 z=c; float it=0.; for(int i=0;i<5;i++){ z=vec2(z.x*z.x-z.y*z.y,2.*z.x*z.y)+c*sin(u_time*0.1); if(length(z)>2.) break; it++; } return hsb2rgb(vec3(u_hue+it*0.1,0.8,1.)); }
+  vec3 patSpiral(vec2 uv) { vec2 p=uv-0.5; float r=length(p); float a=atan(p.y,p.x); float v=sin(20.*r-u_time*5.+a*5.); return hsb2rgb(vec3(u_hue+r,0.8,v)); }
+  vec3 patTruchet(vec2 uv) { vec2 g=fract(uv*5.); vec2 id=floor(uv*5.); if(random(id)>0.5) g.x=1.-g.x; float d=min(length(g),length(g-1.)); float w=step(0.4,d)-step(0.6,d); return hsb2rgb(vec3(u_hue+random(id)*0.2,0.8,w)); }
+  vec3 patMoire(vec2 uv) { float a=sin(length(uv-0.5)*50.); float b=sin(length(uv-0.5+vec2(sin(u_time)*0.01))*40.); return hsb2rgb(vec3(u_hue,0.,a*b)); }
+  vec3 patBauhaus(vec2 uv) { vec2 p=floor(uv*4.)/4.; float s=random(p+floor(u_time)); vec3 c=(s>0.5)?vec3(1.,0.,0.):vec3(0.,0.,1.); return mix(vec3(0.9),c,step(0.8,random(uv))); }
+  vec3 patHex(vec2 uv) { uv*=5.; vec2 r=vec2(1.73,1.); vec2 h=r*0.5; vec2 a=mod(uv,r)-h; vec2 b=mod(uv-h,r)-h; vec2 g=dot(a,a)<dot(b,b)?a:b; float d=length(g); return hsb2rgb(vec3(u_hue,0.8,smoothstep(0.4+sin(u_time*2.)*0.1,0.5,d))); }
+  vec3 patRain(vec2 uv) { uv.x*=0.5; float t=u_time*2.; float r=fract(sin(floor(uv.x*20.))*453.2); float d=step(0.95, fract(uv.y*5.+t*(r+0.5))); return hsb2rgb(vec3(u_hue+r*0.2,0.8,d)); }
+  vec3 patRadar(vec2 uv) { vec2 p=uv-0.5; float a=atan(p.y,p.x); float r=length(p); float s=smoothstep(0.,0.1,mod(a+u_time*2.,PI*2.)); float c=step(0.98,fract(r*10.)); return hsb2rgb(vec3(u_hue,1.,s+c*0.3)); }
+  vec3 patStars(vec2 uv) { vec2 p=(uv-0.5)*2.; float z=fract(u_time*0.5); float r=length(p)/z; float b=smoothstep(0.95,1.,sin(r*20.)); return hsb2rgb(vec3(u_hue,0.5,b*z)); }
+  vec3 patChrome(vec2 uv) { float n=noise(uv*5.+u_time); float s=pow(n, 5.); return hsb2rgb(vec3(u_hue,0.,s)); }
+  vec3 patNebula(vec2 uv) { float n=noise(uv*2.+u_time*0.5)+noise(uv*4.-u_time*0.2)*0.5; return hsb2rgb(vec3(u_hue+n*0.2,0.8,n)); }
+  vec3 patRings(vec2 uv) { float d=length(uv-0.5); float w=sin(d*50.-u_time*5.); return hsb2rgb(vec3(u_hue+d,0.8,step(0.5,w))); }
+  vec3 patSort(vec2 uv) { float shift=step(0.5,random(vec2(floor(uv.y*20.),floor(u_time*5.)))); uv.x+=shift*sin(u_time)*0.1; return patSilk(uv); }
+  vec3 patHalf(vec2 uv) { vec2 g=fract(uv*20.); float d=length(g-0.5); float s=0.5*sin(uv.x+u_time); return hsb2rgb(vec3(u_hue,0.5,step(d,s+0.5))); }
+  vec3 patEnergy(vec2 uv) { vec2 p=uv-0.5; float a=atan(p.y,p.x); float r=length(p); float e=sin(a*10.+u_time*5.)*sin(r*20.-u_time*10.); return hsb2rgb(vec3(u_hue,1.,abs(e))); }
+  
+  // NEW V12
+  vec3 patHyper(vec2 uv) { vec2 p=uv-0.5; float r=length(p); float a=atan(p.y,p.x); float z=fract(u_time+1./r); return hsb2rgb(vec3(u_hue+z, z, r)); }
+  vec3 patWater(vec2 uv) { float c=noise(uv*10.+u_time)+noise(uv*20.-u_time)*0.5; return hsb2rgb(vec3(u_hue, 0.5, c)); }
+  vec3 patRetro(vec2 uv) { float f=0.01/abs(uv.y-0.5); float g=step(0.9, fract(uv.x/uv.y+u_time)); return hsb2rgb(vec3(u_hue, 1.0, f+g*uv.y)); }
+  vec3 patBio(vec2 uv) { uv*=3.; vec2 i=floor(uv); vec2 f=fract(uv); float d=1.; for(int y=-1;y<=1;y++) for(int x=-1;x<=1;x++) { vec2 n=vec2(float(x),float(y)); vec2 p=random2(i+n); p=0.5+0.5*sin(u_time+6.28*p); d=min(d,length(n+p-f)); } return hsb2rgb(vec3(u_hue+d, 0.8, 1.-d)); }
+  vec3 patWave(vec2 uv) { float y=uv.y+sin(uv.x*10.+u_time)*0.1; float l=abs(0.5-y); return hsb2rgb(vec3(u_hue+uv.x, 1.0, 0.02/l)); }
+
+  void main() {
+    vec2 uv = vTexCoord; vec2 st = (uv - 0.5) * (100.0 / u_scale) + 0.5; vec3 col = vec3(0.0);
+    if(u_pattern==0) col=patTopo(st); else if(u_pattern==1) col=patSilk(st); else if(u_pattern==2) col=patGlass(st); else if(u_pattern==3) col=patBokeh(st);
+    else if(u_pattern==4) col=patCircuit(st); else if(u_pattern==5) col=patGlitch(st); else if(u_pattern==6) col=patMatrix(st); else if(u_pattern==7) col=patWire(st);
+    else if(u_pattern==8) col=patKaleido(st); else if(u_pattern==9) col=patPlasma(uv); else if(u_pattern==10) col=patFractal(st); else if(u_pattern==11) col=patSpiral(st);
+    else if(u_pattern==12) col=patTruchet(st); else if(u_pattern==13) col=patMoire(st); else if(u_pattern==14) col=patBauhaus(st); else if(u_pattern==15) col=patHex(st);
+    else if(u_pattern==16) col=patRain(st); else if(u_pattern==17) col=patRadar(st); else if(u_pattern==18) col=patStars(st); else if(u_pattern==19) col=patChrome(st);
+    else if(u_pattern==20) col=patNebula(st); else if(u_pattern==21) col=patRings(st); else if(u_pattern==22) col=patSort(st); else if(u_pattern==23) col=patHalf(st);
+    else if(u_pattern==24) col=patEnergy(st);
+    else if(u_pattern==25) col=patHyper(st); else if(u_pattern==26) col=patWater(st); else if(u_pattern==27) col=patRetro(st); else if(u_pattern==28) col=patBio(st);
+    else if(u_pattern==29) col=patWave(st);
+    gl_FragColor = vec4(col, 1.0);
+  }
+</script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.6.0/p5.min.js"></script>
+
+<script>
+  let myShader, canvas;
+  let isPaused = false; let isRecording = false;
+  let mediaRecorder; let chunks = [];
+  let uiContainer, uiHeader, footer, guideBox;
+  let isDraggingUI = false; let uiOffset = {x:0, y:0};
+  let vs, fs;
+  
+  let recStartTime = 0;
+  let recInterval;
+  let exportCanvas, exportCtx; 
+  let isPortraitMode = false;
+
+  function setup() {
+    canvas = createCanvas(windowWidth, windowHeight, WEBGL);
+    vs = document.getElementById('vertShader').innerText; fs = document.getElementById('fragShader').innerText;
+    myShader = createShader(vs, fs); shader(myShader); pixelDensity(1); noStroke();
+    
+    // Setup Export Buffer (2D Canvas hidden)
+    exportCanvas = document.getElementById('export-canvas');
+    exportCtx = exportCanvas.getContext('2d');
+
+    setupDragEvents();
+  }
+
+  function draw() {
+    if(isPaused) return;
+    
+    let patternIndex = parseInt(document.getElementById('patternSelect').value);
+    let speed = document.getElementById('speedRaw').value / 50.0;
+    let scale = document.getElementById('scaleRaw').value;
+    let hue = document.getElementById('colorRaw').value / 100.0;
+    
+    // 1. Render Shader ke Canvas Utama (WebGL)
+    myShader.setUniform('u_resolution', [width, height]);
+    myShader.setUniform('u_time', millis() / 1000.0 * speed);
+    myShader.setUniform('u_hue', hue);
+    myShader.setUniform('u_scale', parseFloat(scale));
+    myShader.setUniform('u_pattern', patternIndex);
+    rect(0, 0, width, height);
+
+    // 2. Jika Recording: Copy visual dari WebGL ke Export Canvas (2D)
+    if (isRecording) {
+      if (isPortraitMode) {
+        // Mode Portrait: Ambil potongan tengah 9:16
+        let cropW = height * (9/16);
+        let cropX = (width - cropW) / 2;
+        exportCtx.drawImage(canvas.elt, cropX, 0, cropW, height, 0, 0, exportCanvas.width, exportCanvas.height);
+      } else {
+        // Mode Landscape: Ambil Full
+        exportCtx.drawImage(canvas.elt, 0, 0, width, height, 0, 0, exportCanvas.width, exportCanvas.height);
+      }
+    }
+  }
+
+  function setupDragEvents() {
+    uiContainer = document.getElementById('ui-container');
+    uiHeader = document.getElementById('drag-header');
+    footer = document.getElementById('drag-footer');
+    
+    const startDrag = (e) => {
+      isDraggingUI = true;
+      uiOffset.x = e.clientX - uiContainer.offsetLeft;
+      uiOffset.y = e.clientY - uiContainer.offsetTop;
+    };
+    uiHeader.addEventListener('mousedown', startDrag);
+    footer.addEventListener('mousedown', startDrag);
+    window.addEventListener('mousemove', (e) => {
+      if(isDraggingUI) {
+        uiContainer.style.left = (e.clientX - uiOffset.x) + 'px';
+        uiContainer.style.top = (e.clientY - uiOffset.y) + 'px';
+      }
+    });
+    window.addEventListener('mouseup', () => { isDraggingUI = false; });
+  }
+
+  function toggleUI() { let ui = document.getElementById('ui-container'); let btn = document.getElementById('global-toggle'); if(ui.classList.contains('ui-hidden')) { ui.classList.remove('ui-hidden'); btn.innerText = "Hide Controls"; } else { ui.classList.add('ui-hidden'); btn.innerText = "Show Controls"; } }
+  function updateLabels() { document.getElementById('val-speed').innerText = (document.getElementById('speedRaw').value / 50).toFixed(1) + 'x'; document.getElementById('val-scale').innerText = (document.getElementById('scaleRaw').value / 100).toFixed(1); document.getElementById('val-color').innerText = document.getElementById('colorRaw').value; }
+  function setFrame(mode) { let guide = document.getElementById('portrait-guide'); let btnL = document.getElementById('mode-land'); let btnP = document.getElementById('mode-port'); if(mode === 'port') { isPortraitMode = true; guide.style.display = 'block'; btnP.classList.add('active'); btnL.classList.remove('active'); } else { isPortraitMode = false; guide.style.display = 'none'; btnL.classList.add('active'); btnP.classList.remove('active'); } }
+  function setQuality(mode) { if(mode === 'eco') { pixelDensity(1); document.getElementById('modeEco').classList.add('active'); document.getElementById('modePro').classList.remove('active'); } else { pixelDensity(2); document.getElementById('modeEco').classList.remove('active'); document.getElementById('modePro').classList.add('active'); } }
+  function togglePause() { isPaused = !isPaused; let btn = document.getElementById('btn-pause'); if(isPaused) { noLoop(); btn.innerText = 'Resume Animation'; btn.classList.add('btn-active'); } else { loop(); btn.innerText = 'Pause Animation'; btn.classList.remove('btn-active'); } }
+  function windowResized() { resizeCanvas(windowWidth, windowHeight); }
+  function keyPressed() { if(key === 'h' || key === 'H') toggleUI(); }
+
+  function toggleRecord() { if(!isRecording) { startRecording(); } else { stopRecording(); } }
+
+  function startRecording() {
+    if(isPaused) togglePause();
+    
+    // Setup Ukuran Canvas Buffer (Ini yang menentukan hasil akhir video)
+    if (isPortraitMode) {
+      exportCanvas.width = 1080; exportCanvas.height = 1920; // Output 9:16
+    } else {
+      exportCanvas.width = 1920; exportCanvas.height = 1080; // Output 16:9
+    }
+
+    // Capture stream dari Canvas 2D (Buffer) bukan WebGL
+    let stream = exportCanvas.captureStream(60); 
+    let options = { mimeType: 'video/webm;codecs=vp9', videoBitsPerSecond: 25000000 }; 
+    try { mediaRecorder = new MediaRecorder(stream, options); } catch(e) { mediaRecorder = new MediaRecorder(stream); }
+    
+    chunks = [];
+    mediaRecorder.ondataavailable = e => { if(e.data.size > 0) chunks.push(e.data); };
+    mediaRecorder.onstop = saveVideo;
+    mediaRecorder.start();
+    
+    isRecording = true;
+    startTimer();
+    
+    document.getElementById('rec-overlay').style.display = 'flex';
+    let btn = document.getElementById('btn-rec');
+    btn.innerText = 'Stop Recording'; btn.classList.add('btn-active'); btn.classList.remove('btn-danger');
+  }
+
+  function stopRecording() {
+    mediaRecorder.stop();
+    isRecording = false;
+    stopTimer();
+    
+    document.getElementById('rec-overlay').style.display = 'none';
+    let btn = document.getElementById('btn-rec');
+    btn.innerText = 'Start Recording'; btn.classList.remove('btn-active'); btn.classList.add('btn-danger');
+  }
+
+  function startTimer() {
+    recStartTime = Date.now();
+    recInterval = setInterval(() => {
+      let elapsed = Date.now() - recStartTime;
+      let sec = Math.floor(elapsed / 1000);
+      let centi = Math.floor((elapsed % 1000) / 10);
+      let secStr = sec < 10 ? "0" + sec : sec;
+      let centiStr = centi < 10 ? "0" + centi : centi;
+      document.getElementById('rec-text').innerText = "Recording " + secStr + "." + centiStr;
+    }, 50);
+  }
+  function stopTimer() { clearInterval(recInterval); }
+
+  function saveVideo() {
+    const blob = new Blob(chunks, { type: 'video/webm' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); document.body.appendChild(a); a.style.display = 'none';
+    a.href = url; a.download = 'Isa_Motion_' + Date.now() + '.webm';
+    a.click(); window.URL.revokeObjectURL(url);
+  }
+</script>
+
+</body>
+</html>
